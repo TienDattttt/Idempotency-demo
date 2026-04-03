@@ -2,6 +2,7 @@ package com.example.payment.exception;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -38,6 +39,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleNoResourceFound(NoResourceFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .body(error("Không tìm thấy tài nguyên"));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(error("Yêu cầu đang được xử lý, vui lòng thử lại sau"));
     }
 
     @ExceptionHandler(Exception.class)

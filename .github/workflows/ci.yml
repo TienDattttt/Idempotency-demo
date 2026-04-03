@@ -1,0 +1,107 @@
+name: CI - Build, Test & Coverage Gate
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+
+    services:
+      wiremock:
+        image: wiremock/wiremock:3-alpine
+        ports:
+          - 8089:8080
+        options: >-
+          --health-cmd "wget -qO- http://localhost:8080/__admin/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: maven
+
+      - name: Verify WireMock is ready
+        run: curl -f http://localhost:8089/__admin/health
+
+      - name: Build and run all tests with coverage
+        run: mvn clean verify jacoco:report
+        env:
+          WIREMOCK_BASE_URL: http://localhost:8089
+
+      - name: Upload JaCoCo coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          retention-days: 14
+
+      - name: Coverage gate - PaymentController branch 100%
+        run: |
+          MISSED=$(awk -F',' '$3=="com.example.payment.controller" && $4=="PaymentController"{print $7}' target/site/jacoco/jacoco.csv)
+          if [ -z "$MISSED" ]; then
+            echo "Coverage CSV row for PaymentController not found"
+            exit 1
+          fi
+          if [ "$MISSED" != "0" ]; then
+            echo "Branch coverage FAILED: $MISSED branches missed"
+            exit 1
+          fi
+          echo "Branch coverage 100% passed"
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: target/surefire-reports/**/*.xml
+
+  ui-test:
+    runs-on: ubuntu-22.04
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: maven
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Start application in background
+        run: |
+          mvn spring-boot:run -Dspring-boot.run.profiles=h2 &
+          echo $! > app.pid
+          timeout 90 bash -c 'until curl -sf http://localhost:8080/payment; do sleep 2; done'
+
+      - name: Run Selenium UI tests
+        run: mvn -Dtest=PaymentUITest test -Dspring.profiles.active=h2 -DrunUiTests=true
+        continue-on-error: true
+
+      - name: Stop application
+        if: always()
+        run: kill $(cat app.pid) || true
+
+      - name: Upload Selenium screenshots on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: selenium-screenshots
+          path: target/screenshots/
