@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kết quả thanh toán</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2rem;
+        }
+
+        .card {
+            max-width: 520px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+<h1>Kết quả thanh toán</h1>
+
+<div class="card" th:if="${success}">
+    <div id="resultMessage">Thanh toán thành công</div>
+    <p>Mã giao dịch: <strong th:text="${transactionId}"></strong></p>
+    <p>Số tiền: <strong th:text="${amount}"></strong></p>
+</div>
+
+<div class="card" th:if="${!success}">
+    <div id="errorMessage" th:text="${error}">Unknown error</div>
+</div>
+
+<p><a th:href="@{/payment}">Quay lại trang thanh toán</a></p>
+</body>
+</html>
